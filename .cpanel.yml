@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/cp index.html /home/alanb0/public_html/soundboard/
+    - /bin/cp -R * /home/alanb0/public_html/soundboard

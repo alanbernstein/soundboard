@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <style type="text/css">
         body {
             background-color: #000;
+            color: #ccc;
             font-family: Arial, Helvetica, sans-serif;
         }
 
@@ -17,7 +17,6 @@
         }
     </style>
 </head>
-
 <body onload="init();">
 
     <input class='input' type="search" id="searchbox" placeholder="filter" tabindex="0" autofocus><br>
@@ -49,7 +48,6 @@
     </div>
 
     <script type="text/javascript">
-
         function play(fname) {
             var x = new Audio(fname);
             audioList.push(x);
@@ -70,7 +68,6 @@
         }
 
         function init() {
-            //init_document();
             init_search();
         }
 
@@ -99,82 +96,6 @@
             });
 
         }
-
-        // deprecated
-        audioList = []
-        var audio_root = "./audio/";
-
-        function play_old(id) {
-            var x = new Audio(audio_root + id + '.mp3');
-            audioList.push(x);
-            x.volume = 0.1;
-            x.play()
-        }
-
-        function init_document() {
-            var sample_groups = {
-                "stock": [
-                    "crowd",
-                    "dolphin",
-                    "door",
-                    "glass",
-                    "laughing-kid",
-                    "rimshot",
-                    "trombone",
-                    "wilhelm-scream",
-                    "howie-scream",
-                    "boing",
-                    "bell",
-                    "buzzer",
-                    "cash-register",
-                    "flourish",
-                    // magic wand
-                    // fart
-                    // awooga
-                    //'police-chatter.mp3',
-                    //'thunder.mp3',
-                    //'klaxon.mp3',
-                    //'eagle.mp3',
-                    //'air-raid.mp3',
-                    //'shotgun.mp3',
-                ],
-                "misc": [
-                    "research-complete",
-                    "THX",
-                    "modem",
-                ],
-                "aim": [
-                    "receive",
-                    "send",
-                ],
-                "quotes": [
-                    "armstrong",
-                ],
-            };
-
-
-            parent = document.getElementById("group-container");
-            for (const [groupname, samples] of Object.entries(sample_groups)) {
-                var d = document.createElement("div");
-                d.setAttribute("class", "button-container");
-                parent.append(d);
-
-                var h = document.createElement("h3");
-                h.innerHTML = groupname;
-                d.append(h);
-
-                samples.forEach(name => {
-                    var b = document.createElement("button");
-                    b.setAttribute("onclick", "play_old('" + name + "')");
-                    b.setAttribute("id", name);
-                    b.setAttribute("class", "sample");
-                    b.innerHTML = name;
-                    d.append(b);
-                });
-            }
-        }
-
     </script>
 </body>
-
 </html>

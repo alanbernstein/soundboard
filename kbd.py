@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 import os
 import subprocess
@@ -128,25 +129,32 @@ def main(stdscr):
     stdscr.refresh()
 
     while True:
-        key = stdscr.get_wch()
+        try:
+            key = stdscr.get_wch()
 
-        if key in ('q', 'Q'):
-            stop_all_sounds(stdscr)
-            stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "Quitting.")
-            stdscr.refresh()
-            break
+            # if key in ('q', 'Q'):
+            #     stop_all_sounds(stdscr)
+            #     stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "Quitting.")
+            #     stdscr.refresh()
+            #     break
 
-        if key == ' ':
-            stop_all_sounds(stdscr)
-            stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "All sounds stopped.     ")
-            stdscr.refresh()
-            continue
+            if key == ' ':
+                stop_all_sounds(stdscr)
+                stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "All sounds stopped.     ")
+                stdscr.refresh()
+                continue
 
-        sound = key_sound_map.get(key)
-        if sound:
-            play_sound(sound, stdscr)
-        else:
-            stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "No sound mapped for: %s     " % {repr(key)})
-            stdscr.refresh()
+            # use only lower case for now, but later add more sounds for the upper case keys
+            if key in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                key = key.lower()
+            sound = key_sound_map.get(key)
+            if sound:
+                play_sound(sound, stdscr)
+            else:
+                stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "No sound mapped for: %s     " % {repr(key)})
+                stdscr.refresh()
+        except Exception as exc:
+            with open("kbd.log", "a") as log_file:
+                log_file.write("Error: %s\n" % str(exc))
 
 curses.wrapper(main)

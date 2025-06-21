@@ -1,55 +1,64 @@
+import json
 import os
 import subprocess
 import curses
 import threading
 import time
+import wave
+import contextlib
+
 
 # Map specific keys to specific MP3 files
-key_sound_map = {
-    'a': 'audio/animals/dolphin.mp3',
-    'b': 'audio/animals/eagle.mp3',
-    '1': 'audio/animals/frog.mp3',
-    '2': 'audio/animals/horse.mp3',
-    '0': 'audio/animals/owl.mp3',
-    'c': 'audio/fx/airhorn-repeat.mp3',
-    'd': 'audio/fx/glass.mp3',
-    'e': 'audio/fx/awooga.mp3',
-    'f': 'audio/fx/bell.mp3',
-    'g': 'audio/fx/boing.mp3',
-    'h': 'audio/fx/bomb-whistle.mp3',
-    'i': 'audio/fx/buzzer.mp3',
-    'j': 'audio/fx/cash-register.mp3',
-    'k': 'audio/fx/crowd-gasp.mp3',
-    'l': 'audio/fx/crowd.mp3',
-    'm': 'audio/fx/door.mp3',
-    'n': 'audio/fx/dream-sequence.mp3',
-    'o': 'audio/fx/fast-forward.mp3',
-    'p': 'audio/fx/flourish.mp3',
-    'q': '',
-    'r': 'audio/fx/gun.mp3',
-    's': 'audio/fx/laughing-diddy-kid.mp3',
-    't': 'audio/fx/magic-wand.mp3',
-    'u': 'audio/fx/punch.mp3',
-    'v': 'audio/fx/rimshot.mp3',
-    'w': 'audio/fx/scratch.mp3',
-    'x': 'audio/fx/scream-howie.mp3',
-    'y': 'audio/fx/scream-wilhelm.mp3',
-    'z': 'audio/fx/shotgun-blast.mp3',
-    '3': 'audio/fx/shotgun-reload.mp3',
-    '4': 'audio/fx/siren.mp3',
-    '5': 'audio/fx/splat.mp3',
-    '6': 'audio/fx/sting-evil.mp3',
-    '7': 'audio/fx/trombone.mp3',
-    '8': 'audio/fx/vase-break.mp3',
-    '9': 'audio/fx/wa-wa-wa-wa.mp3',
-}
+with open('key-sounds.json', 'r') as f:
+    key_sound_map = json.load(f)
 
 MAX_PARALLEL_SOUNDS = 3
-SOUND_DURATION_SECONDS = 3
+PROGRESS_BAR_WIDTH = 20
 
 # State
-active_channels = []  # list of dicts: {'proc': ..., 'line': ..., 'sound': ...}
+active_channels = []  # list of dicts: {'proc', 'line', 'sound', 'start_time', 'duration'}
 channel_lock = threading.Lock()
+
+def get_wav_duration(path):
+    try:
+        with contextlib.closing(wave.open(path, 'r')) as f:
+            frames = f.getnframes()
+            rate = f.getframerate()
+            return frames / float(rate)
+    except Exception:
+        return 3.0  # fallback
+
+def get_mp3_duration(path):
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', path],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        return float(result.stdout.strip())
+    except Exception:
+        return 3.0  # fallback
+
+def get_duration(path):
+    if path.lower().endswith('.wav'):
+        return get_wav_duration(path)
+    elif path.lower().endswith('.mp3'):
+        return get_mp3_duration(path)
+    else:
+        return 3.0
+
+def get_player_command(path):
+    if path.lower().endswith('.wav'):
+        return ['aplay', path]
+    elif path.lower().endswith('.mp3'):
+        return ['mpg123', path]
+    else:
+        return ['echo', 'Unsupported file type']
+
+def format_progress(elapsed, total, width):
+    filled = int((elapsed / total) * width)
+    empty = width - filled
+    bar = '█' * filled + '-' * empty
+    return f"|{bar}| {elapsed:.1f}s"
 
 def play_sound(sound_path, stdscr):
     global active_channels
@@ -58,39 +67,48 @@ def play_sound(sound_path, stdscr):
         if len(active_channels) >= MAX_PARALLEL_SOUNDS:
             return
 
-        # Find first available line number (0 to MAX-1)
         used_lines = {ch['line'] for ch in active_channels}
         line_num = min(set(range(MAX_PARALLEL_SOUNDS)) - used_lines)
 
-        if sound_path.endswith('.mp3'):
-            player = 'mpg123'
-        elif sound_path.endswith('.wav'):
-            player = 'aplay'
-        proc = subprocess.Popen([player, sound_path],
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
+        duration = get_duration(sound_path)
+        proc = subprocess.Popen(
+            get_player_command(sound_path),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
-        active_channels.append({'proc': proc, 'line': line_num, 'sound': sound_path})
+        channel = {
+            'proc': proc,
+            'line': line_num,
+            'sound': sound_path,
+            'start_time': time.time(),
+            'duration': duration
+        }
+        active_channels.append(channel)
 
-        stdscr.addstr(line_num + 1, 0, f"Channel {line_num+1}: {os.path.basename(sound_path)} started      ")
-        stdscr.clrtoeol()
-        stdscr.refresh()
-
-    def stop_after_delay():
-        time.sleep(SOUND_DURATION_SECONDS)
-        with channel_lock:
-            if proc.poll() is None:
-                proc.terminate()
-            # Clean up display and channel list
-            for ch in active_channels:
-                if ch['proc'] == proc:
-                    stdscr.addstr(ch['line'] + 1, 0, f"Channel {ch['line']+1}:                        ")
-                    stdscr.clrtoeol()
-                    stdscr.refresh()
-                    active_channels.remove(ch)
+    def update_progress():
+        while True:
+            with channel_lock:
+                if proc.poll() is not None:
                     break
+                elapsed = time.time() - channel['start_time']
+                if elapsed >= channel['duration']:
+                    proc.terminate()
+                    break
+                bar = format_progress(elapsed, channel['duration'], PROGRESS_BAR_WIDTH)
+                stdscr.addstr(line_num + 1, 0,
+                              f"Ch {line_num+1}: {os.path.basename(sound_path):<20} {bar}")
+                stdscr.clrtoeol()
+                stdscr.refresh()
+            time.sleep(0.1)
 
-    threading.Thread(target=stop_after_delay, daemon=True).start()
+        with channel_lock:
+            if channel in active_channels:
+                active_channels.remove(channel)
+            stdscr.addstr(line_num + 1, 0, f"{' ' * 80}")
+            stdscr.refresh()
+
+    threading.Thread(target=update_progress, daemon=True).start()
 
 def stop_all_sounds(stdscr):
     global active_channels
@@ -98,8 +116,7 @@ def stop_all_sounds(stdscr):
         for ch in active_channels:
             if ch['proc'].poll() is None:
                 ch['proc'].terminate()
-            stdscr.addstr(ch['line'] + 1, 0, f"Channel {ch['line']+1}:                        ")
-            stdscr.clrtoeol()
+            stdscr.addstr(ch['line'] + 1, 0, f"{' ' * 80}")
         stdscr.refresh()
         active_channels.clear()
 

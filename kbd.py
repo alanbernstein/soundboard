@@ -58,7 +58,7 @@ def format_progress(elapsed, total, width):
     filled = int((elapsed / total) * width)
     empty = width - filled
     bar = '█' * filled + '-' * empty
-    return f"|{bar}| {elapsed:.1f}s"
+    return "|%s| %.1fs" % (bar, elapsed)
 
 def play_sound(sound_path, stdscr):
     global active_channels
@@ -97,7 +97,7 @@ def play_sound(sound_path, stdscr):
                     break
                 bar = format_progress(elapsed, channel['duration'], PROGRESS_BAR_WIDTH)
                 stdscr.addstr(line_num + 1, 0,
-                              f"Ch {line_num+1}: {os.path.basename(sound_path):<20} {bar}")
+                              "Ch %d: %20s %s" %(line_num+1, os.path.basename(sound_path), bar))
                 stdscr.clrtoeol()
                 stdscr.refresh()
             time.sleep(0.1)
@@ -105,7 +105,7 @@ def play_sound(sound_path, stdscr):
         with channel_lock:
             if channel in active_channels:
                 active_channels.remove(channel)
-            stdscr.addstr(line_num + 1, 0, f"{' ' * 80}")
+            stdscr.addstr(line_num + 1, 0, "%s" % (' ' * 80))
             stdscr.refresh()
 
     threading.Thread(target=update_progress, daemon=True).start()
@@ -116,7 +116,7 @@ def stop_all_sounds(stdscr):
         for ch in active_channels:
             if ch['proc'].poll() is None:
                 ch['proc'].terminate()
-            stdscr.addstr(ch['line'] + 1, 0, f"{' ' * 80}")
+            stdscr.addstr(ch['line'] + 1, 0, "%s" % (' ' * 80))
         stdscr.refresh()
         active_channels.clear()
 
@@ -146,7 +146,7 @@ def main(stdscr):
         if sound:
             play_sound(sound, stdscr)
         else:
-            stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, f"No sound mapped for: {repr(key)}     ")
+            stdscr.addstr(MAX_PARALLEL_SOUNDS + 2, 0, "No sound mapped for: %s     " % {repr(key)})
             stdscr.refresh()
 
 curses.wrapper(main)
